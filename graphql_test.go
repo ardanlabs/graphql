@@ -18,20 +18,6 @@ const (
 	failed  = "\u2717"
 )
 
-type document struct {
-	Field1 string  `json:"field1"`
-	Field2 int     `json:"field2"`
-	Field3 float64 `json:"field3"`
-	Field4 bool    `json:"field4"`
-}
-
-type response struct {
-	Documents []document `json:"documents"`
-}
-
-var queryString = `query { getCity(id: "0x01") { id name lat lng } }`
-var clientString = `{"query":"query { getCity(id: \"0x01\") { id name lat lng } }","variables":null}` + "\n"
-
 // TestGraphQL validates all the client support.
 func TestGraphQL(t *testing.T) {
 	t.Run("query", query)
@@ -39,6 +25,20 @@ func TestGraphQL(t *testing.T) {
 }
 
 func query(t *testing.T) {
+	type document struct {
+		Field1 string  `json:"field1"`
+		Field2 int     `json:"field2"`
+		Field3 float64 `json:"field3"`
+		Field4 bool    `json:"field4"`
+	}
+
+	type response struct {
+		Documents []document `json:"documents"`
+	}
+
+	var queryString = `query { getCity(id: "0x01") { id name lat lng } }`
+	var clientString = `{"query":"query { getCity(id: \"0x01\") { id name lat lng } }","variables":{"key1":10,"key2":"hello","key3":28.45}}` + "\n"
+
 	t.Log("Given the need to be able to validate processing a query.")
 	{
 		testID := 0
@@ -80,8 +80,9 @@ func query(t *testing.T) {
 
 			gql := graphql.New(server.URL[7:], http.DefaultClient)
 
+			queryVars := map[string]interface{}{"key1": 10, "key2": "hello", "key3": 28.45}
 			var got response
-			if err := gql.Query(context.Background(), queryString, &got); err != nil {
+			if err := gql.QueryWithVars(context.Background(), graphql.CmdQuery, queryString, queryVars, &got); err != nil {
 				t.Fatalf("\t%s\tTest %d:\tShould be able to execute the query: %v", failed, testID, err)
 			}
 			t.Logf("\t%s\tTest %d:\tShould be able to execute the query.", success, testID)
@@ -101,6 +102,20 @@ func query(t *testing.T) {
 }
 
 func errors(t *testing.T) {
+	type document struct {
+		Field1 string  `json:"field1"`
+		Field2 int     `json:"field2"`
+		Field3 float64 `json:"field3"`
+		Field4 bool    `json:"field4"`
+	}
+
+	type response struct {
+		Documents []document `json:"documents"`
+	}
+
+	var queryString = `query { getCity(id: "0x01") { id name lat lng } }`
+	var clientString = `{"query":"query { getCity(id: \"0x01\") { id name lat lng } }","variables":null}` + "\n"
+
 	t.Log("Given the need to be able to validate process a query with error.")
 	{
 		testID := 0
@@ -142,7 +157,7 @@ func errors(t *testing.T) {
 			if err == nil {
 				t.Fatalf("\t%s\tTest %d:\tShould be able to execute the query with error.", failed, testID)
 			}
-			t.Logf("\t%s\tTest %d:\tShould be able to execute the query with error: %v", success, testID, err)
+			t.Logf("\t%s\tTest %d:\tShould be able to execute the query with error.", success, testID)
 		}
 	}
 }
