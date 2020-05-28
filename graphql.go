@@ -17,9 +17,22 @@ import (
 const (
 	CmdAlter   = "alter"
 	CmdAdmin   = "admin"
-	CmdSchema  = "admin/schema"
 	CmdQuery   = "graphql"
 	CmdQueryPM = "query"
+)
+
+// These are mutation/query to set/get graphql schema.
+const (
+	UpdateGQLSchema = `mutation updateGQLSchema($schema: String!) {
+		updateGQLSchema(input: {
+		  set: { schema: $schema }
+		}) {
+		  gqlSchema {
+			schema
+		  }
+		}
+	  }`
+	GetGQLSchema = `query { getGQLSchema { schema }}`
 )
 
 // These are the supported protocols.
@@ -31,25 +44,27 @@ const (
 // GraphQL represents a system that can accept a graphql query.
 type GraphQL struct {
 	url            string
-	basicAuthToken string
+	authHeaderName string
+	authToken      string
 	client         *http.Client
 }
 
 // New constructs a GraphQL for use to making queries agains a
 // specified host. The apiHost is just the IP:Port of the
 // Dgraph API endpoint.
-func New(protocol string, apiHost string, basicAuthToken string, client *http.Client) *GraphQL {
+func New(protocol string, apiHost string, authHeaderName string, authToken string, client *http.Client) *GraphQL {
 	return &GraphQL{
 		url:            fmt.Sprintf("%s://%s/", protocol, apiHost),
-		basicAuthToken: basicAuthToken,
+		authHeaderName: authHeaderName,
+		authToken:      authToken,
 		client:         client,
 	}
 }
 
 // CreateSchema performs a schema operation against the configured server.
-func (g *GraphQL) CreateSchema(ctx context.Context, schemaString string, response interface{}) error {
-	r := strings.NewReader(schemaString)
-	return g.do(ctx, CmdSchema, r, response)
+func (g *GraphQL) CreateSchema(ctx context.Context, schema string, response interface{}) error {
+	vars := map[string]interface{}{"schema": schema}
+	return g.QueryWithVars(ctx, CmdAdmin, UpdateGQLSchema, vars, response)
 }
 
 // DropAll perform an alter operatation against the configured server
@@ -61,8 +76,7 @@ func (g *GraphQL) DropAll(ctx context.Context, response interface{}) error {
 
 // QuerySchema performs a schema query operation against the configured server.
 func (g *GraphQL) QuerySchema(ctx context.Context, response interface{}) error {
-	query := `query { getGQLSchema { schema }}`
-	return g.QueryWithVars(ctx, CmdAdmin, query, nil, response)
+	return g.QueryWithVars(ctx, CmdAdmin, GetGQLSchema, nil, response)
 }
 
 // Mutate performs a mutation operation against the configured server.
@@ -115,8 +129,8 @@ func (g *GraphQL) do(ctx context.Context, command string, r io.Reader, response 
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
-	if g.basicAuthToken != "" {
-		req.Header.Set("Authorization: Basic", g.basicAuthToken)
+	if g.authToken != "" {
+		req.Header.Set(g.authHeaderName, g.authToken)
 	}
 
 	resp, err := g.client.Do(req)
