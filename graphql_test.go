@@ -78,7 +78,7 @@ func query(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(f))
 			defer server.Close()
 
-			gql := graphql.New(graphql.HTTP, server.URL[7:], http.DefaultClient)
+			gql := graphql.New(server.URL, http.DefaultClient)
 
 			queryVars := map[string]interface{}{"key1": 10, "key2": "hello", "key3": 28.45}
 			var got response
@@ -150,7 +150,7 @@ func errors(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(f))
 			defer server.Close()
 
-			gql := graphql.New(graphql.HTTP, server.URL[7:], http.DefaultClient)
+			gql := graphql.New(server.URL, http.DefaultClient)
 
 			var got response
 			err := gql.Query(context.Background(), queryString, &got)
