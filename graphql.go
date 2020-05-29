@@ -34,10 +34,10 @@ type GraphQL struct {
 }
 
 // New constructs a GraphQL for use to making queries agains a specified host.
-// The apiHost is the IP:Port of the Dgraph API endpoint.
-func New(protocol string, apiHost string, client *http.Client, options ...func(gql *GraphQL)) *GraphQL {
+// The endpoint is the IP:Port of the Dgraph API endpoint.
+func New(protocol string, endpoint string, client *http.Client, options ...func(gql *GraphQL)) *GraphQL {
 	gql := GraphQL{
-		url:    fmt.Sprintf("%s://%s/", protocol, apiHost),
+		url:    fmt.Sprintf("%s://%s/", protocol, endpoint),
 		client: client,
 	}
 	for _, option := range options {
