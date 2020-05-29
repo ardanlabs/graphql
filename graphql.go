@@ -79,11 +79,11 @@ func (g *GraphQL) QueryWithVars(ctx context.Context, command string, queryString
 		return fmt.Errorf("graphql encoding error: %w", err)
 	}
 
-	return g.do(ctx, command, &b, response)
+	return g.Do(ctx, command, &b, response)
 }
 
-// do provides the mechanics of handling a GraphQL request and response.
-func (g *GraphQL) do(ctx context.Context, command string, r io.Reader, response interface{}) error {
+// Do provides the mechanics of handling a GraphQL request and response.
+func (g *GraphQL) Do(ctx context.Context, command string, r io.Reader, response interface{}) error {
 
 	// Want to capture the query being executed for logging.
 	// The TeeReader will write the query to this buffer when
