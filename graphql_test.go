@@ -82,7 +82,7 @@ func query(t *testing.T) {
 
 			queryVars := map[string]interface{}{"key1": 10, "key2": "hello", "key3": 28.45}
 			var got response
-			if err := gql.QueryWithVars(context.Background(), graphql.CmdQuery, queryString, queryVars, &got); err != nil {
+			if err := gql.QueryWithVars(context.Background(), graphql.CmdGraphQL, queryString, queryVars, &got); err != nil {
 				t.Fatalf("\t%s\tTest %d:\tShould be able to execute the query: %v", failed, testID, err)
 			}
 			t.Logf("\t%s\tTest %d:\tShould be able to execute the query.", success, testID)
