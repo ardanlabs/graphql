@@ -16,13 +16,6 @@ import (
 	"time"
 )
 
-// These commands represents the set of know graphql commands.
-const (
-	cmdAdmin   = "admin"
-	cmdGraphQL = "graphql"
-	cmdDQL     = "query"
-)
-
 // This provides a default client configuration but it is recommended
 // this is replaced by the user using the WithClient function.
 var defaultClient = http.Client{
@@ -92,18 +85,20 @@ func (g *GraphQL) Query(ctx context.Context, queryString string, response interf
 			variable(queryVars)
 		}
 	}
-	return g.query(ctx, cmdGraphQL, queryString, queryVars, response)
+	return g.query(ctx, "graphql", queryString, queryVars, response)
 }
 
-// QueryDQL performs a Dgraph Query Language (DQL) query against the configured
-// Dgraph server.
-func (g *GraphQL) QueryDQL(ctx context.Context, queryString string, response interface{}) error {
-	return g.query(ctx, cmdDQL, queryString, nil, response)
-}
-
-// QueryAdmin performs a request against the /admin endpoint.
-func (g *GraphQL) QueryAdmin(ctx context.Context, queryString string, response interface{}) error {
-	return g.query(ctx, cmdAdmin, queryString, nil, response)
+// QueryEndpoint performs a GraphQL query against the configured server at the
+// specified endpoint from the base URL.
+func (g *GraphQL) QueryEndpoint(ctx context.Context, endpoint string, queryString string, response interface{}, variables ...func(m map[string]interface{})) error {
+	var queryVars map[string]interface{}
+	if len(variables) > 0 {
+		queryVars = make(map[string]interface{})
+		for _, variable := range variables {
+			variable(queryVars)
+		}
+	}
+	return g.query(ctx, endpoint, queryString, queryVars, response)
 }
 
 // query performs a query against the configured server with variable substituion.
