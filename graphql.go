@@ -52,8 +52,9 @@ type GraphQL struct {
 // The url is the fully qualifying URL without the /graphql path.
 func New(url string, options ...func(gql *GraphQL)) *GraphQL {
 	gql := GraphQL{
-		url:    strings.TrimRight(url, "/") + "/",
-		client: &defaultClient,
+		url:     strings.TrimRight(url, "/") + "/",
+		headers: make(map[string]string),
+		client:  &defaultClient,
 	}
 	for _, option := range options {
 		option(&gql)
