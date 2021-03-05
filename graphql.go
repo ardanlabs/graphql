@@ -18,9 +18,9 @@ import (
 
 // These commands represents the set of know graphql commands.
 const (
-	CmdAdmin   = "admin"
-	CmdGraphQL = "graphql"
-	CmdDQL     = "query"
+	cmdAdmin   = "admin"
+	cmdGraphQL = "graphql"
+	cmdDQL     = "query"
 )
 
 // This provides a default client configuration but it is recommended
@@ -76,19 +76,38 @@ func WithHeader(key string, value string) func(gql *GraphQL) {
 	}
 }
 
+// WithVariable allows for the submission of variables to the query.
+func WithVariable(key string, value interface{}) func(m map[string]interface{}) {
+	return func(m map[string]interface{}) {
+		m[key] = value
+	}
+}
+
 // Query performs a GraphQL query against the configured server.
-func (g *GraphQL) Query(ctx context.Context, queryString string, response interface{}) error {
-	return g.QueryWithVars(ctx, CmdGraphQL, queryString, nil, response)
+func (g *GraphQL) Query(ctx context.Context, queryString string, response interface{}, variables ...func(m map[string]interface{})) error {
+	var queryVars map[string]interface{}
+	if len(variables) > 0 {
+		queryVars = make(map[string]interface{})
+		for _, variable := range variables {
+			variable(queryVars)
+		}
+	}
+	return g.query(ctx, cmdGraphQL, queryString, queryVars, response)
 }
 
 // QueryDQL performs a Dgraph Query Language (DQL) query against the configured
 // Dgraph server.
 func (g *GraphQL) QueryDQL(ctx context.Context, queryString string, response interface{}) error {
-	return g.QueryWithVars(ctx, CmdDQL, queryString, nil, response)
+	return g.query(ctx, cmdDQL, queryString, nil, response)
 }
 
-// QueryWithVars performs a query against the configured server with variable substituion.
-func (g *GraphQL) QueryWithVars(ctx context.Context, command string, queryString string, queryVars map[string]interface{}, response interface{}) error {
+// QueryAdmin performs a request against the /admin endpoint.
+func (g *GraphQL) QueryAdmin(ctx context.Context, queryString string, response interface{}) error {
+	return g.query(ctx, cmdAdmin, queryString, nil, response)
+}
+
+// query performs a query against the configured server with variable substituion.
+func (g *GraphQL) query(ctx context.Context, command string, queryString string, queryVars map[string]interface{}, response interface{}) error {
 	request := struct {
 		Query     string                 `json:"query"`
 		Variables map[string]interface{} `json:"variables"`
@@ -102,11 +121,11 @@ func (g *GraphQL) QueryWithVars(ctx context.Context, command string, queryString
 		return fmt.Errorf("graphql encoding error: %w", err)
 	}
 
-	return g.Do(ctx, command, &b, response)
+	return g.do(ctx, command, &b, response)
 }
 
 // Do provides the mechanics of handling a GraphQL request and response.
-func (g *GraphQL) Do(ctx context.Context, command string, r io.Reader, response interface{}) error {
+func (g *GraphQL) do(ctx context.Context, command string, r io.Reader, response interface{}) error {
 
 	// Want to capture the query being executed for development level logging
 	// below. The TeeReader will write the query to this buffer when the request
