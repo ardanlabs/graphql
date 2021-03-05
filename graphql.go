@@ -101,8 +101,14 @@ func (g *GraphQL) QueryEndpoint(ctx context.Context, endpoint string, queryStrin
 	return g.query(ctx, endpoint, queryString, queryVars, response)
 }
 
+// Do performs a request against the endpoint and doesn't prepare the request
+// as a GraphQL request.
+func (g *GraphQL) Do(ctx context.Context, endpoint string, queryString string, response interface{}) error {
+	return g.do(ctx, endpoint, strings.NewReader(queryString), response)
+}
+
 // query performs a query against the configured server with variable substituion.
-func (g *GraphQL) query(ctx context.Context, command string, queryString string, queryVars map[string]interface{}, response interface{}) error {
+func (g *GraphQL) query(ctx context.Context, endpoint string, queryString string, queryVars map[string]interface{}, response interface{}) error {
 	request := struct {
 		Query     string                 `json:"query"`
 		Variables map[string]interface{} `json:"variables"`
@@ -116,11 +122,11 @@ func (g *GraphQL) query(ctx context.Context, command string, queryString string,
 		return fmt.Errorf("graphql encoding error: %w", err)
 	}
 
-	return g.do(ctx, command, &b, response)
+	return g.do(ctx, endpoint, &b, response)
 }
 
 // Do provides the mechanics of handling a GraphQL request and response.
-func (g *GraphQL) do(ctx context.Context, command string, r io.Reader, response interface{}) error {
+func (g *GraphQL) do(ctx context.Context, endpoint string, r io.Reader, response interface{}) error {
 
 	// Want to capture the query being executed for development level logging
 	// below. The TeeReader will write the query to this buffer when the request
@@ -128,7 +134,7 @@ func (g *GraphQL) do(ctx context.Context, command string, r io.Reader, response 
 	var query bytes.Buffer
 	r = io.TeeReader(r, &query)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.url+command, r)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.url+endpoint, r)
 	if err != nil {
 		return fmt.Errorf("graphql create request error: %w", err)
 	}
