@@ -81,7 +81,7 @@ func query(t *testing.T) {
 			gql := graphql.New(server.URL)
 
 			var got response
-			err := gql.Query(context.Background(), queryString, &got,
+			err := gql.Execute(context.Background(), queryString, &got,
 				graphql.WithVariable("key1", 10),
 				graphql.WithVariable("key2", "hello"),
 				graphql.WithVariable("key3", 28.45),
@@ -157,7 +157,7 @@ func errors(t *testing.T) {
 			gql := graphql.New(server.URL)
 
 			var got response
-			err := gql.Query(context.Background(), queryString, &got)
+			err := gql.Execute(context.Background(), queryString, &got)
 			if err == nil {
 				t.Fatalf("\t%s\tTest %d:\tShould be able to execute the query with error.", failed, testID)
 			}

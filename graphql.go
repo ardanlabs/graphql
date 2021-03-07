@@ -39,6 +39,7 @@ type GraphQL struct {
 	url     string
 	headers map[string]string
 	client  *http.Client
+	logFunc func(s string)
 }
 
 // New constructs a GraphQL for use to making queries agains a specified host.
@@ -62,6 +63,13 @@ func WithClient(client *http.Client) func(gql *GraphQL) {
 	}
 }
 
+// WithLogging acceps a function for logging raw execution messages.
+func WithLogging(logFunc func(s string)) func(gql *GraphQL) {
+	return func(gql *GraphQL) {
+		gql.logFunc = logFunc
+	}
+}
+
 // WithHeader adds a key value pair to the header for requests.
 func WithHeader(key string, value string) func(gql *GraphQL) {
 	return func(gql *GraphQL) {
@@ -78,8 +86,9 @@ func WithVariable(key string, value interface{}) func(m map[string]interface{}) 
 	}
 }
 
-// Query performs a GraphQL query against the configured server.
-func (g *GraphQL) Query(ctx context.Context, queryString string, response interface{}, variables ...func(m map[string]interface{})) error {
+// Execute performs a GraphQL query against the configured server on the
+// graphql endpoint from the base URL.
+func (g *GraphQL) Execute(ctx context.Context, queryString string, response interface{}, variables ...func(m map[string]interface{})) error {
 	var queryVars map[string]interface{}
 	if len(variables) > 0 {
 		queryVars = make(map[string]interface{})
@@ -90,9 +99,9 @@ func (g *GraphQL) Query(ctx context.Context, queryString string, response interf
 	return g.query(ctx, "graphql", queryString, queryVars, response)
 }
 
-// QueryEndpoint performs a GraphQL query against the configured server at the
+// ExecuteOnEndpoint performs a GraphQL query against the configured server on the
 // specified endpoint from the base URL.
-func (g *GraphQL) QueryEndpoint(ctx context.Context, endpoint string, queryString string, response interface{}, variables ...func(m map[string]interface{})) error {
+func (g *GraphQL) ExecuteOnEndpoint(ctx context.Context, endpoint string, queryString string, response interface{}, variables ...func(m map[string]interface{})) error {
 	var queryVars map[string]interface{}
 	if len(variables) > 0 {
 		queryVars = make(map[string]interface{})
@@ -101,12 +110,6 @@ func (g *GraphQL) QueryEndpoint(ctx context.Context, endpoint string, queryStrin
 		}
 	}
 	return g.query(ctx, endpoint, queryString, queryVars, response)
-}
-
-// Do performs a request against the endpoint and doesn't prepare the request
-// as a GraphQL request.
-func (g *GraphQL) Do(ctx context.Context, endpoint string, queryString string, response interface{}) error {
-	return g.do(ctx, endpoint, strings.NewReader(queryString), response)
 }
 
 // query performs a query against the configured server with variable substituion.
@@ -124,17 +127,19 @@ func (g *GraphQL) query(ctx context.Context, endpoint string, queryString string
 		return fmt.Errorf("graphql encoding error: %w", err)
 	}
 
-	return g.do(ctx, endpoint, &b, response)
+	return g.RawRequest(ctx, endpoint, &b, response)
 }
 
-// Do provides the mechanics of handling a GraphQL request and response.
-func (g *GraphQL) do(ctx context.Context, endpoint string, r io.Reader, response interface{}) error {
+// RawRequest performs a request against the specified endpoint and doesn't
+// prepare the request as a GraphQL request.
+func (g *GraphQL) RawRequest(ctx context.Context, endpoint string, r io.Reader, response interface{}) error {
 
-	// Want to capture the query being executed for development level logging
-	// below. The TeeReader will write the query to this buffer when the request
-	// reads the query for the http call.
-	var query bytes.Buffer
-	r = io.TeeReader(r, &query)
+	// Use the TeeReader to capture the request being sent. This is needed if the
+	// requrest fails for the error being returned or for logging if a log
+	// function is provided. The TeeReader will write the request to this buffer
+	// during the http operation.
+	var request bytes.Buffer
+	r = io.TeeReader(r, &request)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, g.url+endpoint, r)
 	if err != nil {
@@ -163,8 +168,9 @@ func (g *GraphQL) do(ctx context.Context, endpoint string, r io.Reader, response
 		return fmt.Errorf("graphql op error: status code: %s", resp.Status)
 	}
 
-	// This is for development level logging if running into a problem.
-	// fmt.Println("*****graphql*******>\n", query.String(), "\n", string(data))
+	if g.logFunc != nil {
+		g.logFunc(fmt.Sprintf("request:[%s] data:[%s]", request.String(), string(data)))
+	}
 
 	result := struct {
 		Data   interface{}
@@ -179,7 +185,7 @@ func (g *GraphQL) do(ctx context.Context, endpoint string, r io.Reader, response
 	}
 
 	if len(result.Errors) > 0 {
-		return fmt.Errorf("graphql op error:\nquery:\n%sgraphql error:\n%s", query.String(), result.Errors[0].Message)
+		return fmt.Errorf("graphql op error: request:[%s] error:[%s]", request.String(), result.Errors[0].Message)
 	}
 
 	return nil
