@@ -1,6 +1,5 @@
-// Package graphql provides support for executing mutations and queries against a
-// database using GraphQL. It was designed specifically for working with
-// [Dgraph](https://dgraph.io/) and has some Dgraph specific support.
+// Package graphql provides client support for executing graphql requests
+// against a host that supports the graphql protocol.
 package graphql
 
 import (
@@ -16,8 +15,9 @@ import (
 	"time"
 )
 
-// This provides a default client configuration but it is recommended
-// this is replaced by the user using the WithClient function.
+// This provides a default client configuration, but it's recommended
+// this is replaced by the user with application specific settings using
+// the WithClient function at the time a GraphQL is constructed.
 var defaultClient = http.Client{
 	Transport: &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -34,7 +34,8 @@ var defaultClient = http.Client{
 	},
 }
 
-// GraphQL represents a system that can accept a graphql query.
+// GraphQL represents a client that can execute graphql and raw requests
+// against a host.
 type GraphQL struct {
 	url     string
 	headers map[string]string
@@ -42,35 +43,46 @@ type GraphQL struct {
 	logFunc func(s string)
 }
 
-// New constructs a GraphQL for use to making queries agains a specified host.
-// The url is the fully qualifying URL without the /graphql path.
+// New constructs a GraphQL that can be used to execute graphql and raw requests
+// against the specified url. The url represents a fully qualified URL without
+// the `graphql` endpoint attached. If `/graphql` is provided, it's trimmed off.
 func New(url string, options ...func(gql *GraphQL)) *GraphQL {
+	url = strings.TrimRight(url, "/graphql")
+	url = strings.TrimRight(url, "/") + "/"
+
 	gql := GraphQL{
-		url:     strings.TrimRight(url, "/") + "/",
+		url:     url,
 		headers: make(map[string]string),
 		client:  &defaultClient,
 	}
+
 	for _, option := range options {
 		option(&gql)
 	}
+
 	return &gql
 }
 
-// WithClient adds a custom client for processing requests.
+// WithClient adds a custom client for processing requests. It's recommend
+// to not use the default client and provide your own.
 func WithClient(client *http.Client) func(gql *GraphQL) {
 	return func(gql *GraphQL) {
 		gql.client = client
 	}
 }
 
-// WithLogging acceps a function for logging raw execution messages.
+// WithLogging acceps a function for capturing raw execution messages for the
+// purpose of application logging.
 func WithLogging(logFunc func(s string)) func(gql *GraphQL) {
 	return func(gql *GraphQL) {
 		gql.logFunc = logFunc
 	}
 }
 
-// WithHeader adds a key value pair to the header for requests.
+// WithHeader adds a key/value pair to the request header for all calls made to
+// the host. This is for things like authentication or application specific needs.
+// These headers are already included:
+// "Cache-Control": "no-cache", "Content-Type": "application/json", "Accept": "application/json"
 func WithHeader(key string, value string) func(gql *GraphQL) {
 	return func(gql *GraphQL) {
 		if key != "" {
@@ -79,16 +91,17 @@ func WithHeader(key string, value string) func(gql *GraphQL) {
 	}
 }
 
-// WithVariable allows for the submission of variables to the query.
+// WithVariable allows for the submission of variables when executing graphql
+// against the host for queries that supports variable substitution.
 func WithVariable(key string, value interface{}) func(m map[string]interface{}) {
 	return func(m map[string]interface{}) {
 		m[key] = value
 	}
 }
 
-// Execute performs a GraphQL query against the configured server on the
-// graphql endpoint from the base URL.
-func (g *GraphQL) Execute(ctx context.Context, queryString string, response interface{}, variables ...func(m map[string]interface{})) error {
+// Execute performs a graphql request against the configured host on the
+// url/graphql endpoint.
+func (g *GraphQL) Execute(ctx context.Context, graphql string, response interface{}, variables ...func(m map[string]interface{})) error {
 	var queryVars map[string]interface{}
 	if len(variables) > 0 {
 		queryVars = make(map[string]interface{})
@@ -96,12 +109,12 @@ func (g *GraphQL) Execute(ctx context.Context, queryString string, response inte
 			variable(queryVars)
 		}
 	}
-	return g.query(ctx, "graphql", queryString, queryVars, response)
+	return g.query(ctx, "graphql", graphql, queryVars, response)
 }
 
-// ExecuteOnEndpoint performs a GraphQL query against the configured server on the
-// specified endpoint from the base URL.
-func (g *GraphQL) ExecuteOnEndpoint(ctx context.Context, endpoint string, queryString string, response interface{}, variables ...func(m map[string]interface{})) error {
+// ExecuteOnEndpoint performs a graphql request against the configured host on
+// the specified url/endpoint
+func (g *GraphQL) ExecuteOnEndpoint(ctx context.Context, endpoint string, graphql string, response interface{}, variables ...func(m map[string]interface{})) error {
 	var queryVars map[string]interface{}
 	if len(variables) > 0 {
 		queryVars = make(map[string]interface{})
@@ -109,16 +122,18 @@ func (g *GraphQL) ExecuteOnEndpoint(ctx context.Context, endpoint string, queryS
 			variable(queryVars)
 		}
 	}
-	return g.query(ctx, endpoint, queryString, queryVars, response)
+	return g.query(ctx, endpoint, graphql, queryVars, response)
 }
 
-// query performs a query against the configured server with variable substituion.
-func (g *GraphQL) query(ctx context.Context, endpoint string, queryString string, queryVars map[string]interface{}, response interface{}) error {
+// query prepares the graphql request by applying the graphql request document
+// around the query and variables. Then executes the request against the
+// configured url/endpoint.
+func (g *GraphQL) query(ctx context.Context, endpoint string, graphql string, queryVars map[string]interface{}, response interface{}) error {
 	request := struct {
 		Query     string                 `json:"query"`
 		Variables map[string]interface{} `json:"variables"`
 	}{
-		Query:     queryString,
+		Query:     graphql,
 		Variables: queryVars,
 	}
 
@@ -130,8 +145,9 @@ func (g *GraphQL) query(ctx context.Context, endpoint string, queryString string
 	return g.RawRequest(ctx, endpoint, &b, response)
 }
 
-// RawRequest performs a request against the specified endpoint and doesn't
-// prepare the request as a GraphQL request.
+// RawRequest performs the actual execution of a request against the specified
+// url/endpoint. Use this function only when the request doesn't require a
+// graphql document wrapper.
 func (g *GraphQL) RawRequest(ctx context.Context, endpoint string, r io.Reader, response interface{}) error {
 
 	// Use the TeeReader to capture the request being sent. This is needed if the
